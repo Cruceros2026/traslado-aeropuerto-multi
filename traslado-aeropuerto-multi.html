@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<!-- ============ 2 BARCOS — VERSIÓN 6 — 11/10/2026 ============
-     Base: Traslado Apto-Hotel v34 (1 voyage) + lógica de 2 operaciones de la v5 multi (09/09/2026).
+<!-- ============ 2 BARCOS — VERSIÓN 10 — 18/10/2026 ============
+     v10: hasta 2 guías por grupo vuelo + hotel (grupos grandes): campo guide2Name.
+     v9: dentro de cada vuelo, pasajeros separados por hotel (Ritz juntos / Mandarin juntos) y la
+         coordinadora asigna de antemano el guía de cada grupo vuelo + hotel; filtro por guía en Sala.
+     v8: pasajeros CON traslado arriba, por vuelo del más temprano al más tarde (ambos barcos mezclados);
+         los sin vuelo propio (Air Code N/A) no heredan fecha y quedan abajo, como en la de 1 voyage.
+     v7: + teléfonos de pasajeros (v37 de 1 voyage) y llegada al hotel solo desde Hospitality.
+     Base: Traslado Apto-Hotel v34→v37 (1 voyage) + lógica de 2 operaciones de la v5 multi (09/09/2026).
      Datos en Firebase bajo "traslados_multi/<CÓDIGO DE OPERACIÓN>" (separado de "traslados/").
      ============================================================ -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Traslado Apto-Hotel (-3,-2,-1) — 2 Barcos v6</title>
+<title>Traslado Apto-Hotel (-3,-2,-1) — 2 Barcos v10</title>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -116,6 +122,15 @@
   .ship-block-label{font-weight:700; font-size:12.5px; margin-bottom:10px; display:flex; align-items:center; gap:8px;}
   .ship-block.B .ship-block-label{color:var(--plum);}
   .ship-block.A .ship-block-label{color:var(--navy);}
+  .phone-btn{border:1px solid #B9C7D3; background:#fff; border-radius:50%; width:24px; height:24px; padding:0; font-size:13px; line-height:22px; cursor:pointer; vertical-align:middle; margin-left:4px;}
+  .phone-btn.has{background:#E1F3E8; border-color:#2EA84E;}
+  .phone-btn.none{opacity:.45;}
+  .phone-actions{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;}
+  .phone-actions a.btn{text-decoration:none; display:inline-block;}
+  .hotel-subhead .guide-assign{display:flex; align-items:center; gap:6px; font-weight:600; color:var(--muted);}
+  .hotel-subhead .guide-assign select{width:auto; min-width:170px; padding:4px 8px; font-size:12px;}
+  .guide-chip{display:inline-block; background:#E3EDF9; color:var(--blue); border-radius:20px; padding:3px 10px; font-size:11px; font-weight:700;}
+  .guide-chip.none{background:#FBF0DC; color:var(--amber);}
   .day-btn-sub{display:block; font-size:9.5px; font-weight:600; opacity:.85; margin-top:1px;}
   @keyframes ticaBlink{0%,100%{opacity:1; transform:scale(1);} 50%{opacity:.45; transform:scale(1.12);}}
   @keyframes ticaFlash{0%,100%{background:#FFF1CC;} 50%{background:#FFD9A0;}}
@@ -249,7 +264,7 @@
   </div>
   <div class="cover-card">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAuAAAADMCAMAAAAF8eZfAAAAA3NCSVQICAjb4U/gAAADAFBMVEX///+n27qk2Lam17mh2LWptcKms8KmssCir76h2LWf17Ka1rKa1K6W062W1KuS0qqRz6merLudqrqbqbqVpbWWo7aRorOQn7KOz6aGzqKKzaKFyp6Byp2BypuQn7KNna6Mm6+Kmq6Il6yGlqqBkqd9kKZ8ypl5x5V2xpJ1xpZww45xw5Btwo19kKZ6jqN4iqJ1iZ91h59xhp1wg5xtgZptwo1swopnwIlhvoVkvoZfvoJdvIJtgZpsgZdpfpZlepRieJNhdpJddJBcvH5Zu31VunlRt3lQtnVMtXRcco5ZcI5Zb4tVbYpUaohRaYZQZ4ZNZYNMZoVLtXFMtXRJs3FFsm1BsmxBsWlBsGs8r2U+rmlKZINJYoJHYH9GXX5BW3tAWXs9WHk8Vng4rmU2rmE4rGI1q2Exq2Azql4yql0tqlwsqlkvqFwoqVktp1sop1k5VHY3UnU1UXMxTXEvTG8tSW0qSW0oqVkop1koplYkplUkplIgpVEfo1Ieo00dolAbok0YokkYoEwqSW0oRWokRGkkQmgkQWchQGYfPWQdPWIbOmEYOWEYokkYokwYoEwUoUkXn0kRoEgUnkUUnkgQnkUMnkENm0MLm0EImkAHmj0YOWEXOF4XNl4UNV0TMlwRMVwQMVkOMFkMLVgLLVYJLFYIKVUHmj0EmjwEmToElzkAlzgAljQAkzEAkzQAki0AkCgAjygAjSQAjCAIKVUEJ1EEJVEAJE4AJFAAIE0AH0oAHEkAGUgAGEUAFEIAFUUAEEAADD0ABzkAADNJs3FBsWk8r2Uxq2AtqlwoqVkkplIkplUgpVEeo00dolAbok0YokwYokkboUsUoUkYoEwRoEgXn0kUnkUUnkgQnkUNnkUMnkENm0MLm0EImkAEmjwHmj0EmToAlzgAljQAkzEYOWEXOF4XNl4UNV0TMlwRMVwQMVkOMFkMLVgLLVYJLFYIKVUIKFEEJ1EEJVEAJE4AJFAAIE0AH0oAHEkAGUgAGEUAFUUAFEIAEEAADD0ABzmWUZ6RAAABAHRSTlMAEREREREREREiIiIiIiIiIiIiIiIiIiIzMzMzMzMzMzMzMzMzM0RERERERERERERERERERFVVVVVVVVVVVVVVVVVVZmZmZmZmZmZmZmZmZmZmd3d3d3d3d3d3d3d3d3d3d3eIiIiIiIiIiIiIiIiIiIiIiIiIiJmZmZmZmZmZmZmZmZmZmZmZmZmZmZmqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqru7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7////////////////////////////////////////////////////////////////////////////////5zcUIQAAAAlwSFlzAAALEgAACxIB0t1+/AAAABZ0RVh0Q3JlYXRpb24gVGltZQAwMS8xOS8yM1P9udYAAAAcdEVYdFNvZnR3YXJlAEFkb2JlIEZpcmV3b3JrcyBDUzbovLKMAAAgAElEQVR4nO2dC3wU1dn/E2taClpFRFHRorWAihSvIPqiAhGoFyhyixcUQVB4/auAUC4VL2hB0bZavNZIUaGYxKDiqyhioG9vMJmZOO8Ks5u9Jpmd3Wx2N5PdyS7B8t/NZndnzjlz22ug57v99OOHOXPmTOa3zz5zznOep6QEg8FgMBgMBoPBYDAYDAaDwWAwGAwGg8FgMBgMBoPBYDAYDAaDwWAwGAwGg8FgMBhMxly6akftk+WlxR4GBpMPHq61m2iKsTXt+HGxh4LB5Jqf7LCQB4iDsQ9hahpd7NFgMJlwaj+lI+eZTURC3zGF0/YxhRwVBpM1fa9f+VZNdVNTdc32NZNOh483f5fSd0zhDYf6Fn6IGEzGzHdaGZLo1jDZYLEvAo9XNNan9R1TuLmiGKPEYDLjUVu91ECTlt8ADZqlx+NOSj2eS8EcN1zjIKXyjQnYOUHWYEQzQchb2K4p0lgxGMP8ngHkSzB/lDUYYQMbWG4p0lgxGMPU1h8k5B/qDVmDGeYDQAMzFjjmuKGWAPVLWmQNZrJY4JjjlxpQvgdJ9mRpAyxwzPEMSuCyBljgmOMZLHDMCQ12UTAnNL3ego+cu7GycsvjV5cV8qKYE4ZaWOCvyxoUV+D/VRkVAj5fW3tnx5TCXRVz4vBxPahf6jVZg6IKfGo0wLd0424LP1awy2JOHNaaQP2yL8saFFPgU0Uf19ID5xXmFuq6mBOHU5oouYBJ5zmyBkUU+JBgWt8xhbeKvyjQhTH55NzJdy6uemT6dERkdj5Y5KTT0VQEQTmfkR8vosBXCO4WCVxwfYEujMkXT3+6s8ZpYxmGYW3Omo+rJ2ifkjWTPzSbGmgqBs2YLDvAaO/iCfysNi8nFXiLJ9K/MFfG5IWxO5pddMKYHkiIirbVvHpa/i88cfUzLz99+I+x/3t4BHSweAIfH+Zl+m7hOscV5sqYPDDhLQfNgFN2BMG4nizuRvbiCfyesNyAt7SEby/MlTE555zNDhqK60tMS5uaxhZzZMUT+P0CoO8W4f7CXBmTa2a65PsOyAbTITPL0GT8X2nHQ8UcWtEEfh8s8PsKc2VMjnnLLpmrI0jG0fjP/43xN6rRZaZj/2AuosKxwDHZ0myW7IskGMfqoalD/cpfsTUQJDunaIPDAsdkydNmMj0RTVpelS+0lFzyho2izJcWZ2xY4JhsmdOY1vdB0rISbjGhiWGYYuVqwALHZMVoC5XWN2VfjGpz7g7WclehB9YDFjgmG35glkwPUrbVCs3+YnEp5g7ML1jgmGyYZZb4J2YlfcdfRKGcaoUhU4FfMnblq5928+SiSedmcuWcC7zs8js2vPDXBO8/f//lx9EeirJR857bFx/3l/f10W49avyGdxO3ufW5uSPPyP/wlDlNGszHPKXccKitOb8jUfLxMxH46Kdra5wWU8L3ImmTxdn86Zvzz9E6DWBuOyjw9nsNdpHm4vt27++KhIO+xPI/7wuEI0f37XngIuNd/TyjAZRpfZ2UG1z97v6jnR1+L9fC8b5w19e3qXVzQ2VdXTTUc5+8Lxju7Nr3zYqixWEukMiHspyq0nJOU/6SXvabWVPT1PxJ9SxE4ljDAr/m99WOBhJYlmUIinXWbDaUenluABR4IEOBj9qwLyr4eLC7FnerENlXebWBnq6qrDv2/bG//ulKYwO4bfe+o111+96+WOH4Revr6o7Gv2+wyIe8UCcGpEN3+zq3Kn0XbtgabwxGOLi9wc663apfi7zRfOBAaobQVq7WsvRwVb4GMcNujhlbiqDMLli7xgTed06VrQEdc0DEg8eaHzlPYzA/vWna3dNi/5t6RwukSG/L1DsSR2P/u+dqfdb3zPt2RwKwuJPwfvHrx4bo6qnkwm2xnrwtrXyg872f6TslzpWfi/FvF8cHoht/hGqwvivo4eLft46jt8qPjNoSCUKC5YUw8uqbvu70K92o2xf6vrLwdnyyI61vBkzrCjCp+SSN3kpPveS6GQ89uaa5m0+efvKuiZfpiNRalJrHISgHNEtpROAnLWxiKUV5d/9KMbanVGpElN37xREx3CHECXjd0FPyBIQUYTF67B7Nm7t8mSi0Qh3J4LyCuEHJtkq5KfVF4figX7da7gn5kwPgBQF2oftv7fAkh+ILPSA5ctFGhD2O/x0CX0O9/Gjav0Wf2o1ynkDnrlsL/N7xGi2ZAR+u3rafU8XClw4eM2cx7XJYWIamYh+Gosj6mPNrty+aoDH9Ml+aP5m0rAIOGxD4o1aWVFN393eIaHDYlSR+pTuk+ozAR+YLHxulem8XLReDXoRCwI74YGi9pmt94RHJBiN3wP9TrRMS3CBITwsKUINNAi/dmJf+0t4rwNa7p1nHi0Antwc7VH6mklf3iZ6p+kadI2rS0mKUZ1B6WKLgo5x87cyHKauVbYCMZ+zngWSsh2aqxZSfb6+XnkI5r5Mf1y3woQ6buvVOaZyx/ho5ootF7WcECFMIqPgpZUuDgkdb3t09eYLC8gEqf6YYnwWkfbmD76o3Tw4i4JeexgvbgAbTwlIVcz7hwsS/D3w+7FMcvCc8UNrHTzd0+Nx67pT3iRvH6xp3TrjEnhaETXP3zuhPEf84bM4qijUzFJjEW6Inij08XbnXPwL5k5kP5cf1Crz8sEl5DMCI6ll2EqKLzwP61CgVZtCreGc3e8Kwl6Pck0fwq3o840X5t4+P6JpOuU2U77vzCmfKjpe1tMnu2t0TE3y2ICiY70SrZZI+pvjV2sqJvXM8rmfcOWFBeks7RWmuxZ/cDDaZuPZ3h1XF3SMounGtUu+lTWD6b6fcbdcp8EVmhXh2hRFZ4Wn9+0UD7knqeYnTFO5sQ4fiG5eCaHziBpU///vA10/nFtFtPuAqHctlx8cB3xvO54v7yTe2B1Ud6kBluotlQpsRx84b2lgoT/yT1CQ4weqYBHxT5j08uvNNC0OReswmQbIuBYVfBuW3Z+X7K/QJfJVFn3uSNuLmJWAf+1v1P6X04/JvQt7XwPfCOr0TSV8eYZfy5MgXXqC5Z79iWwl14L47/9uy47d3AMPkozEf5SzBr67ZtndSPawXdbxmSEfACy16Rp4DdqajCC066oI89VLqP2/5pLmJJvT6BHG/V2EOZg2kX2a7rIEugb9kqzek77jCreBLxz7DDkq3Hr5H3dYoUen9TP3RB6JK08VlggdsXaf0oCSc3QUOw7dF1mBFEOxWvLmkrE3Vfsfwp94A3hONfpNjCo8UxoZXpT0UUkfzO3uc8DFV1RaKOWBMUabtyD5XMmA3tPHUba9YDcq7W+KAlzKwy9hjSnIEYXRvi7Zl9G2JOQjirXB3ccqCkMNz9Ifaz+zMKHhW6xZZg2XQclZ4VMzp0PCuuGDSm1raacwR64YXNmoPPRtO+vGw60ZfVpHSDsFAP9gIhsYFfs0zNVYj7m5KT+YHUX0+kgOBj3Vqzg6iPqRd5gxlKvAoPIV9s6g8/6AB54ugA14QAu/SYQYRApfPvsACD/zv7UHw1wLELcxLnH61CHpOuuDFzKMe1Ok7tuLJnTVNLrvNZm5I6YIwzdJxbj/ndYtrbA0ZqekgQbGoubkcWPCTnHRmI6LlLwbHwpk8Kq5rYAnATZ0Z6zuGN4KcTCmcwL3uFk2nmhd67nqXP7Nb9UbP0h68UU65flWVy2ZK2l+pKkw6XPBBfzvUQGeo7viH/W9Epzmw4KtZhR8UgqRotbdgwiwLcv+rT/u5wHigRb0bItnoO6bA0H8h/lBlAciq5kngnFtzSpvzf5Y4e6mSL8PxXp/Po/wewgnPag/eEKeV/8ZpYRTexUhGaxn+1PJ1NpPRNzn5h/ruFLjf7C34MBaMrOq+mMnhcm1eu3btU7FfKzMUfNXTqFra0TbwdUsPXACc2hsSzNCopbr0RRAJhgpnwXXgiSRWay4MtML3ynkCoejR3W9vqny3qyvS4Uer3LNHe/AGGP6g1UKjn3L3k35J/fTRCw9ZaP1zJkoGEzG/l70FX3wYGhdBO16fNTwZInD++RNXx0OwEMNvkvooFxzV8jxRz0m8Qn5DZYFABtPpcoW0dUJuTwEtuAy+LRzdW1fXFREkQQytkZ4p+PsEOF7HF9qz7IYLk91PG//iHmRACxc1EC6mxWWLGk2q88T0Mypn95292sbApxNkA2txOF1NTS6XIx58ral/BrEfLmsLPugQNDTS/AbkcV37jJ2BR+gcKm2zTDSscF54ArjQVviZp1sHxK7v/33s2LF///uIGFCeXeOCH0B/qGJYcM4rdG25uXvlc/y03dFgYsR8+/c9ASVlbsgZ44UwVClgVGUnYtI0dKP26PVx+kr2MMJ4kzTrcFXX1NRUu+z21xTPvuxh2grafpJudNbsrF4z69oR55SWnF4yYsSEiu21Lq3FFoqG466ytuCTGsGLUg7k5qNBmx0U2JVDHmC23qjCeSEABJA8JirNmvHB6P5NN6QaPrBibxTWbLJteAU4/CJYcD7Y+bjkEgM37quLdka69m9I/uNV0M3yod8iR7EFfu8WntMevS5mWwB5HyBiHqq95pPfzxw6qLvFKUMnI/caxxj7B6ssALXn1M2TB8FtS2+piUerqojcBufWzNqCL4RqgVuVog3HNIPhKvbL5C2WHw163D1wHGR0Yv/klsAHoruASwwJI5zSlu5FyqPvDAEa//SFujB6viJmOgHPp/AWnPOKu6Dwr6uuuFISxHgPtAoqKIUP3LAXDFcJ52aisHSHDdAcQZvtNat17d+6q8Ym+V0nSIp1VH+05nyVq82vNqtIHFFlPlsLXkqAZplZqzy+T4EVzyZw5nLItrpopJtORPgn7+/ojKSI+aYjwQtUBlGC5Xghil7ZWLobHW8oi/XoptAWnGsNzdPqfIMfOMnHKzf+Sr7i6Y5erj16bWY2yQ0cQZoaX51/svaJ8XNrLSmxxiw3c4jdvGaY9lkWRvFlloVzT2Rrwc+xkKABB6yyjAUyN8r0FqJJWZ/+8c8P+8MP3ddS1r9P6oOQ169CKKcj9t61UXHRcWMYGanEi0BJoAJb8Ji+NS1sGbgexAlq5yyT/lxx/t3ag9dmgVPuFlOsaaW2RrupqDGnQ7EoE9uwZpK+VOGDVpuVfHFmPtQ6Wws+3A55KKobLCokHhdjRThaaW6Hpg2DGvsKwdDTHq0GBLUo/ylBpCveGhwi77uwFpzv1N6tNLAL+Gryguo2o3kdKYVzvnAucq3/2kH+S/L8KTOzQF9hkpNXVcVUmlK3jXhwrIHMVtOtCgqn4SSe2VrwsRbgKLVGfXDzkzacZFj11S3jaSPuRi178IJXfXfZEC/qNLfwgKxVYS24O/yCdt9DIsBZntYzVU+Y17NhiuP9wi+1+9fkLUv9wb+nfsFJk2mWPhvct8KeWjwhGQdboWOZU0a5E5qvSAi8AWqarQWfaAUO0ws1BjfTamNommZtBwarNzQs8D5+xBImL/BamUTKngVrScTxBmWT4YW14MmVSlVu7ASHrBUGe3dQDLb5fEHRnwv73dxUTxz8G9Vjh+nGJao/yClOnW0zJ17F4vsCHA9dq89jl3GLHbmkT9VDLbO14BMtoMAf1hrcaRMWPblu7QLNFBKGBT4FsWPCHWxBbmSXsxFhw93yaYaCWnDPET2boMeJkMDP1jil/y+XV1a++8QvdWQP0qTZRhJE0oKTrO1afafNtPV4qTGH3fHyGK0lfAUWWlBOCklBDbO24KDAKZVJFGMYFnhlG6QUzi/oKVxVxiHir1tl+4MLacE5aPkKCSRwPnCh9lm5otkenwEhEj445Vij04de17NzN2a8q+ZnUUnwFUi48Y8D6jHnFpy05KpsllGBX4GIjPaK0EwikouCcKSXW7YbrpAW3BPRNWjIRXF3GElilB1Pu7r13b3phqBdqD22KBbaui0+wTizLCF4GljgtdtPckECz9aCj7GC1zDrvVctjAp8GTwHzmvPtfUwFbEC6t8qaVBIC66zIOjZ4EsmFyxYufPfWYkeNzqGyalzarCkpCqeFopkq58aqt1WnUlmhJPigqxrthZ8uAO8DH0426H3YFTgX0MK5PzKe+5Bfgtv6eePSBRcQAvOR/WlXBl4BByyN6gzWUu2LLSllhP/RZnf1D/F96GLYezViCT4xmlmYBfFBb3nZmvBh4Kblg8S7NO5GL5hgY/qhBTqEdXzAslO74C/HyHJvHsBLbgPDvVC8iNo8ocLgguw+eEcV2oS419/txl66yqveS1H1UomIt4zc2/BS7+FXCHCphH8qxODAn8e3jkQ1PWu1sNy2MPxSVb7CmjBVdelpFRCLw688H4hqkF/JNkR/K8FBbggkmZ4yR4WeNbRhIvAYKt45olmOKrLOAYFDnsovHCDSnuQUdC2+RZ3XfpwAXf0RPRGiTyGeOsIHNVeAs2WsWm/lKT/nvfLKXEn7IXn3oLHjiN8fZP9jeznUowJvA+Un4FrAxP4qbMR9sIj6TXQwllwvlPviMeHEGE0XvHzfGeR/Si1CZc4XF+s4lExR8kKrfbk3gcvGWquh339gwRjf2p0lrduTODjwUnhVBI0vdwBb5UIphOkFc6C+3SndDirHRU/726LfHlbPvOezE6/d9HsT/J4IS1WQ7vd82DBS9bCPkr3d7vB5lidlcaNCfxZ2BIanFJA2OjWr9SO5ittxDKFvmCeRUYHt7h94Ujl+Lw5439JvXaRVpVc2PlnOuQ95MEHL7lFeVN9g826utxo5ZIUxgS+B8wPwvm2KrdG8j9QKIs7nZ2tcBZc0IwDTzFOeVN9W0j807Qr82HIx6T3cLGaKZHzyghoHiUfFrxks3JJh5jGG12r54zJyCE3JvD9kAvuN+aCI+dR6lIHC2fBOwwUG3kHbcJ7NC5EWh6/Neer90+mfrKpmlz3bYx+DOiE58EHj71T21STtRAUa2FW3qV7rSuFMYHXgY3dgtHphAtFSC1HhiQPFs6Ch27WP+SR7ao5gvjWYCi4cSkqz0vGDG9MPW5bgQpKKrIEdMLzYsFL/mBW389PEPUNZtO6VQY1bkjgA45ADzeskdAe5htILGJqQqJwFtyIwEvWd2jUZ3F7fEKw8sW7DfSpzsOmpAGn81Y1Si/zDxfAB4+xE/2eKXdWKNb8+lojDrkhgV8FxmW08KKBayWog8TScX/yWO+04CUlXys7KSmR860B4egHuZk8PPW71CsmuGW88NwCZn3NjwUv6dukrfDufaWsfbv+UCxjAodmCXl9IXlS9sHzhM8nj/VSC15SckzQkciL470BcY+RhV0lJqVe7Jg3ctBddgwFdZcXHzxGqUNn/RKCtlVP1jl6QwK/DcrcyR/ReZ00+yENB9IC76UWPJ60VFcqdM7tDX+TffWSNSm31551QGDW9P2/erm8nNC0fE4seOxKh5EZClEfylo1UdfoDQl8I7RD2WNc4PsgDQd6vwUvKdsi6CzxwHnDX8811jnIuRYiqZM3s+spJ6yVR0KRud+TmaR0IYvMPoj60PaX9WxUMiRwONTKc1THNeTAW4KOBwteUrJcQJbTREm8VdydQfXyNKlVD8IyVrt13lkjn0bJw57MNGMaFNNVQI6KyXm99uALL/Cl8KricWDBY4zjw3oLjLr9XUplu/TwclJRpKN4QShpVjfIvYNvoRa5suAxTrrToV0ItkfhtAVZb0KGIYFvgAXepXkFkC1Q+OnxYcFjrOjU66e0eENqxeTUOS2VBofJyaaFbFkinyek82nBY/Sr0CrlnVI4ZV6sZQEMCfwJqPF/jA+eoM9j3+i04hwvdGa6q748OYdC6N1En18eNsnUxsA5S3JoweP0nVHt0DNleJAgWWQOWgmGBD4lBDb+j5lFSXHP7oiuUtEcH+QzDFJJxe+RlgzzPeSWJfJAKETqtpxa8G4ue6naoqdKFmmZrT74bOfBdYdVp0DMg6d+zXu7Be/mii11Ypu2xjnlLLTqlKbKjdG9wkMpmSi3pqa8W/AEY6uadBSGpazq+34MCXwcvJJpXODwSmY6+c9xYMG7ufnLupCmq8J5whmt3Q9LbuUh2BnZDDJnXGqSyQxRIT73FjzBo2/VOJh61VK1BO1S7cKQwPtAQnILhpOE7IGEIV6ZPHZcWPAE0/buEwMeHs6vLlF4a/SMDHqen3J5bUVfpu8GELi5HGqRFwue4Prf/aXRRKtVWWOVC1uUZB1NyAWNrmlcdfxFEyoxvvKrDsHnVdY4F3xHuxeIt5LrKqQJUdCsCAACt8ACz5cFTzBs8UuHLYxiSn6iSe1NJdt48MCfdY8zwQYobomrSx08jix4gp8t3domBFuVVoB4VCk5DUqdqUDC4u50SAEIHDG1k0cLnuCkSYtJVqlElulllTONCXwvVPHXa3xHD6SCfamDubPgW2QN8ibw+Jh/tdyjqPE2PQls5Qx3JB8iYrqiKAACR8Q35teCJyi9diFtRlZBJGpVTjMm8GVQMAofNBYgOgDe/+X7PHU0Qwt+EfTy65Pn5smnwOPDHrfUhy6VyXcZngyfdSj55HKWny9L5AInWTiBc94teIK+169FFvp0qCwXGBP4jdA8IRdcamiM82AJS/bll8FpU6I6tvXeBA3LJ99Jl2eBx+hz08ZwG0LiguFEhttToU1WffFyeUcucIruC7UohAVPMIZFLOQzqCo9PWSdF0WtJBOCSjh9fkSSpnsX5AN16viFuBu6ibZCCzzGDX/ugBfyW6Ei6FrUptRkzlH6tWyRC5w+ALcokAWPU7rAASmc2Knc3mBmq68gAfLtRsKKxsMeCl8nOf4Z1H+HjtS1KyD9+t+WNSiIwEtKlorQC4Z7n/ZpcqpT+X4YfcUc8o5c4Kj4mMJZ8BgVdiiRoYoTblDgsBPO+TcZGNwGOLFV2/uS47DA9WTO+hzKZhGQl2otkMBLpkSh8R816IQPdiWfGsmoVhorHIDAEa++BbTgMWaBe+jk1erlGBT41XB2Wb5Dv1ZuRKQYCd0qafAF5MF46rS73QslgBWWyxoUSuAlU6ECLxE9dVIkXJcqdkAdzMsQjSMXOFsBtyioBS8peb0B6MyunDLFaH7wPXD+Y5+go0BPAtEPfz+OSqdJnocsPLdXs9efQd86PiDXb8EEXvI5eKXw/cY6WJlax6R7pcAJM2I3ZPYWvN+a2prajzQCp5KcZwN6synPNxkV+Ap4f7lb0Bv6vAKu8MD535O2uAOsmx1TiGae4y2IhHLyuZfsBL5tf92+vc/qa3tWBLiBoMFq9UuYXi5wK7yQmb0F/0M8BJykbdX6djBVAz4Korp4EqMCvygCOxm8qK8e5I2wh9riTgeixCmLQJEqrfuV+ktSBw3JA6yvZCPw9cdED8/7wnv1FWoBB2NU4JupXi5wBrENOksLPnh7cu6Pds3SM6JqMm8CL3kH9jJaWrv0bEG8uBOuQdXi65A3gsXaEtGI51oK7fXnfNvkTTIX+BkfhBKj5lo7dUl1G/AlNirwT4leJ/AJ0rSBZAMiQCY7C36uKR2PSzq0djDEWQMK3JCLoh4+NR5Vqb4toq3wsjZ4BqXFDUaU7oG/BG0aBd/hLUJQhcCMBd5HSC9M8bp2oW0AbsCowD9JPbpeI/BHpBsekBUss7Pgmw9Jv0C2xdoj+hAQuE05/y4s8IBG3tV/t8KB0Jw/8jONMV0UQFSr53ztQOq3ByBzHBPWeLWOn+iAuxWHyNtkLPCt0nTmfFiHwsGlKmGFrgul2Jl6dMw/jZ2ZNxab0rVUCBpVRT4rCz5RXoGKtGrb8BowFZFy2CUscJ/GxPNtqJLcnL9ziupZV0UCiA0CPPRzUdYFNeN8HSq1hW8S4fz00NRipgK/Miq7V77jT5oB3vuAv454q9YZcmrTAv+HsTPzhkzgzP9DtMjKgr8JJPckzU6NMOGTnUBnzcpt50EC50WN8KbvESY8pkLxAZVz7o0gKtzHTvJAM4zfIIrFBnjFFJ/jwoiOg1uAVpkKfBdwHt8e1Crtcwy4UPQsPRdKU5N62qZeI/DvJO+YLErgWVnwj6HoKZNJPeX/QqA34mPltlPhNzRBI3zq5g7UhkTOK3TdpHDGL15Ep1vgBXiZ/x5oY3N8/65XISJlvNAGd8xFQX8pU4HvB38d3IEO9VnLFcDfkzO6VJ8WOPs3g6fmi5UNEoEfGoNokZUF33mQAD8N7AKVdBClYDQKpbJUfytcYskTlshu5BVXQOdsQeZa5fiA8MKNiEtc+WwQGUrawgVQG14Q8yixroOPI1aTRq4Ion4YWuvAhpkK/K8of+l5NZv8OfADpGchVkYvFLg0sxWBCJbN1oIj6k9RJlY5lPJVE2DzG1X2rt4chp9ha/DPidKAv6x8TwiGt94BnHN2CJ7P7tFh+9Z5A2Vt+zz2ZyHgcSP17Q2hKhD+Fgp36W4rBDYC3sG4F4NBD6rjEJSUP1OBwxM08Z+ToPJr+P+A3/105lydVPc6gQ8+JDGY5GZUk6ws+JoG8Fg8STJt2YGW+CkfguV8iCaV0V/oRz3DgPDFl1/t/kIIeHne4xfBmOblnYpVa3xC+Msvp91wxoABA84YOfXr3SHBp7Qxlw8hJxgGHEV6QG5vMPTlV4+P6x/reUD/qRu/2q30xfHBK0OZCvxFRI17zu0TvkIv+pTtCgMDckcNFjcZ5up1Ap8vNZgUUuBZWfByuI53t2xpR+1LJ0OX+hTKIk4wqjUCNiFWX2IPkY+T0A/n7QQ9j8/gYoDJMzne0yZ0Ro8cORLt7Gjjlbedu4MK89vrFXJxczzvaxfjPR+JhIKtPFLd8ZdkWLuZCnwKuPDe89fxift2wcpdHwVnQrm2rxC9qjHY3tsEPsIsiU4lGOT+x+zmwZuVsliRJlfNurGpKZXS4RVVza56sDFpP1dt/L9FLL+AD9T/J/Cs3UGdaShVOlWarSkTUY617n4Du+AuM54H34N4h+2GD0T3fTA3JfKyKx7bs1eAHCZeHoigg6G9TeAnEb8XKEAAAAsrSURBVDLxsjNRjbJbySxvVM4KXs9YXNW1O2PU1rocJgoq2nmQMKkXtX9MR+0CvmsIcNbAdtS0tgE4n/hzpSHdilos1duvV0TEp2Ys8KtDitk2Y+5YR+TYvv1x6ro6272I9a/A+9qXkNPbLPiPSbnHaxuMapVlLMoilXyyBw70XP8AcQD5NaCs6uUFRylVgZQC/+pfHEDEpOiHaxNUlic3IRY9dcILqPoKmceiPBBC1TlOX071Jr3hkfqukqaXWfDBpHzGgkC7u9lGEzaZdeYER7gxKoFWCbYq/QpLQOwbuyrkz9yGx/SNmlBMcoFfx5iQuIPIEt1ZRBMuRy3c6oM3UG02idSC/93w2TmmdLoZcI/JamTDbOPBT6KUCh1rfQjLQ1p3MU3HE0QVpB/XlrGXEtO3ekKcm4XWjBTu9vuRsxbZhMt+356hwnndcfISeo8FLx0651so+SWN3r++Cha4vHjWZKgIpjwevN93mSmcMD+sfSefQTVFIMKojcWX+zP0JNyBsJr9jjMXfmHTAecLXIXsbjkkcFE9dEZCmbtDZ+kS4C6DygEGykgsuKmIwVaDyxcdsCHS0Dei41JnQ/o9LM/KdZ0F1KblTlmDvk83ZqBwgqV0JJgeeURLp1wnakWm5Kw2IZNHz7cHtPcpvqCvqpl8mK0hhXX0peDiEddpIGloXXsGt+kOtBvcjdmNxIIXK9jqB2NXrzOZ0bkAXaciT7nUDja1TJA1GGYHJ6/t1wF9bLforFwitd9P6irx8g68XC/HG1GwRdsQoXwacJ7QNj17ON+Gt7dp9ewTlXzee8AFGF4zvFfKVhG9dKs2mGDIyBVSDE4HyhVF4Oev3MweMlH16CyASvkZSp1AJgfCJVdePyvQgITTB73qognENZU/pPV1sA8FdgsKiyaJZ8WLipt81ne1qSUQhvvi2qI6PdM/RfTWw+np2n9E0fG5Avwi+t5WaopkqdHb5AXDCX8SnOoqngUvnbHjI4dZLVUxXaNw6mq5C00w4DdhIdCARWxruOYji2IKWcSXrcH+lO5b+0rF5Y09LJXkVRfHM8HrffbxMql1WvGmKR6IBvW7BhzfsVdlV9GL8uUsXtS3wTLFqLpwq4Hb9IlGVzBTpGNRGEQKqfwx4smPXfHEf6oCsyntCT7ZJfXXCcoJpnQ5zyYtSELQjch68xVWVqfECapxMyquUYn1IVRivThubwg585ZiniAopg8Gnrs3GFpmYFAXbO3w6ZM4xwc6VNPcTpHF63L+VsM5MR8Iteu+TSGsvq9VjXQ0YeG2rP3gzqoaB6PtAlPoScI45ZIJF4K0wVuHJ1olCqdRW/PjnLboEEtrVzsmKPN3/23sHqe1CiiJcx4hoKXJsmVtgrYQOb5VCDw/UKMvgLkBHT3HuvYLf4ajemUslyic84VvMjaOOD98wo/8E8HyDjz3Q+PdJ6kttMAnP1rlMn+ry2zaVPI5zzQzCdsb808sqHblqcJpJONUXpw5ZfpaK4vMkpxSN0Fb/m+O8doAKzaJ7XI1xRejhY1DtE8dMM8TCqjO68U0GGp73Phr14D7/Yq/LcmuPcHwi9p5K7ZFkkV1+KDRbWQ99J/2YrhDdTTxaMrA0iEZ9d5Dek8mRee9xtrpE59udjE668OT7DNqfQ2nHGaGphmzg0SXhbqWcHY3sNgXgzMocobOIuyKFR0ImnUQt2RW+uLmeXwoEupoD7T5YgQEUeTm6vSYy8avF8SABz0bw3n8IfG523XkQUYw4Pbno8pm3O0NiOJyXWUU7gh2CrEbC3RENxleQE8xcu6msKiU7d7d2t7Zes9PM+68m49TT5Vs+El2Xanzk9EV213mBt1zcyRLa+RKnDz5kXVrF08frtygYuW6pxbdMkx7cCNGL2CdNtBbISiTzXVoEiIxi17KBvxi/N2Pz3uh8p3Kyifm3mTI4g4c/3w4Gg54gR8BbyAcEddPvSDzQZWMvPeFaKfgB6K/Yz5PMBQVVkzR6/b0v/GB5yrffWIuei1INxeMX/p+RIwPB7jPULTj/l9kWBozTTovCmFRlkqWnHTN5DVWG6O3Knz802Bb8uN8DQfN4BEz1rxZ43I5bJYYVofTVb159mj1yKo8U/azW1fs2tsV7QyF44TEaNc3u5745c+zcEl7OOPKu1fsjvcsdvccFiPRo9988MQUg9sJcsVZ46Zu/KwuNRwx0vXNZ8umnJ21umP8MTVhrDxnkR1DJy2m7Xpe5dIfinW9ob4POG+cPGjw2Ikxrr/mNDjxfnEoG3LRr26PM3XkkEyrWaPpP+Siqd093zHl7CG5UFN29Lnw57d2D+e2C87MWafp3IQHNePkjNN30uLVrEW36SYohrXaXbXVs1X3FGAwupmRDutgp+e26/MWvcywh3SZboqxOJtqd35Svbhi9GW6lsMxGF1cmk4NbHowh/1eW7XdzKoWVI1B1jOsvan240+rV12v41UQgzHMOelgFFpHKKgu+lXU1NgYQnGZMiZsuuGwyfLmjqrXZgzHBhuTT9Jr9dR3uZgIP2dRjSse+HoAOatMkBRjYk3fPfPyIxN6SUkgzIlNusoacQgdnGqAoQtqnYiw7sSHpBmz9dvfrKzIZmYZgzGGROD27CbCJz9aZTch0kbFDTfFmO3MqorpozNbE8RgMuW1dOQ0sGvACCeNXqK0CE/SrMNOz590aW+ZV8b8R/FweiIcnYREm34TH3XaGFQ6HYJi7U1rZl6ate+DwWTILemJcHpJBucPKl9sszSgbDdlsldvnon9bUxRGeZIh1tZjU7ZnTP9EVMjA2U3i0du2aqrK/DcNqbo9GtKq9NpKLSo34x1TGMDYi2HYl21r1yWrwFjMIZIF6AhbOqB0zJmvNLIwuomYqa7pnoBnivB9Bok0yimOTrPueat6sYGYCt8fBGHtVVXGdm6iMHknV+np1HoV/SccOraWjtDQOpuYNnN687L92gxGIOMbUwrtUn7LbP8TZep/iCwEE8x7OHfzEbuXMdgiotkGoWwXqve9rQHq2X5GBJuN2P97qFyHFmC6Z2c7EorlnlErWXF03YWnPAmGyzWRyZo7J7EYIrI9vRGYHKHYqtBM5vtDDhpQpmdq8cWddsiBqOFtGyfU8HTqKhwsaBvQjL218qxujG9nbtMaeGaKhANTpvksptA34SyVK/COycxxwHXpHetEYiSCkMfPNRIA+lMCMZePbkIQ8VgjHO65C2TcALZf65Z0mgCkj4RJNv0BxxmgjleKG2U2Gfm99JDY6rof4LybnDUrCzWUDGYDPi1tDi8K70vYfZOR8OBg9I0xARpsr2e+bYIDKYYyGqSMcmZwvLqeJkEyZJ8PM028xKeNsEcb4yWVm8n2M0x/3rQgiob1ZOeOJmFuMFSPyvvCWgxmJxznlXmZTdYm2vtptTe+ISPQjKWR7BvgjkuKSXAkk2S//7HP2MCJ03OJXnLPYvB5JlFUGHV1If8xz+I+sOu+acXe4wYTMbMUK77G7PgrGsxfrPEHM+MUS77SzY4V+e18gMGk3cGHUImpIpXqHH+HjsnmOOetRTKghO0o+rSYg8Ng8meh1BpqSjrh9cXe2AYTC6YYwb3oRGUmc0k0RUG0wsZehiIh6VYo6V9MZhezDMyJ5xkzPNx7h7MCcQ66X40ml11SbEHhMHkksWmlMBJM4uTU2FOMK5NvmUSjGsOLguFOeFoTrxlUpbtg4s9FAwm97wZ3/RAmpoyLPKAwfRu+n5iYx01a7F3gjlRmb9kUrGHgMFgMBgMBoPBYDAYDAaDwWAwGAwGg8FgMBgMBoPBYDAYDAaDwWAwGAwGg8GcKPx/L2jcgpFGZpYAAAAASUVORK5CYII=" alt="ILS Tours" style="max-width:180px; width:100%; height:auto; display:block; margin:0 auto 16px;">
-    <h1 style="text-align:center;">🚐 Traslado de Pasajeros Apto Internacional-Hotel (-3, -2, -1) <span style="white-space:nowrap;">— 2 Barcos <span class="cover-version-badge">v6</span></span></h1>
+    <h1 style="text-align:center;">🚐 Traslado de Pasajeros Apto Internacional-Hotel (-3, -2, -1) <span style="white-space:nowrap;">— 2 Barcos <span class="cover-version-badge">v10</span></span></h1>
     <p class="lead" style="text-align:center;">Para los días en que coinciden en el aeropuerto 2 operaciones de embarque de distintos barcos, atendidas por el mismo staff.</p>
     <div class="cover-info-box">Ingresa el <strong>Código de Operación</strong> con los 2 Voyage Code unidos por un guion (ej. <strong>EV260106018-E4260108006</strong>). Si ya existe, entrarás a la misma planilla que el resto del equipo; si es nueva, la crearás ahora. Ten a mano la <strong>Transfer Manifest de cada barco</strong>: se suben al crear la operación (o después, desde "Manifest / Reporte").</div>
 
@@ -351,7 +366,7 @@
 <div id="app">
 <header class="top">
   <div>
-    <h1 id="tripTitle" style="display:inline;">Traslado de Pasajeros Apto Internacional-Hotel (-3, -2, -1)</h1> <span style="font-size:10px;color:#9FC1D6;font-weight:700;">2 Barcos v6</span>
+    <h1 id="tripTitle" style="display:inline;">Traslado de Pasajeros Apto Internacional-Hotel (-3, -2, -1)</h1> <span style="font-size:10px;color:#9FC1D6;font-weight:700;">2 Barcos v10</span>
     <div class="sub" id="tripSub">Sin configurar aún</div>
     <div class="sub" style="cursor:pointer; text-decoration:underline;" onclick="openEditTripModal()">✏️ Editar barcos / fechas de embarque</div>
   </div>
@@ -382,8 +397,14 @@
     <div class="panel">
       <div class="toprow">
         <h2 style="margin:0;">Pasajeros por vuelo <span class="counter" id="salaCount"></span></h2>
-        <span class="counter"><span class="sync-dot"></span>Sincronizado en vivo</span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="salaGuideFilter" onchange="render()" style="width:auto; min-width:190px; padding:6px 8px; font-size:12px;" title="Ver solo los pasajeros de un guía">
+            <option value="">🧭 Todos los guías</option>
+          </select>
+          <span class="counter"><span class="sync-dot"></span>Sincronizado en vivo</span>
+        </div>
       </div>
+      <div class="hint" style="margin-bottom:6px;">Cada vuelo viene separado por hotel (los del Ritz juntos, los del Mandarin juntos). La coordinadora puede asignar de antemano el 🧭 guía de cada grupo con el selector del hotel (y un 2º guía si el grupo es grande): queda a la vista de todos y se propone solo al marcar "en camino a Parking".</div>
       <div class="hint" style="margin-bottom:10px;">Marca el cuadrado junto al nombre cuando el pasajero hace contacto con el staff en sala — queda chequeado y disponible en Parking. Usa "📋 Requerimientos" para casos especiales: silla de ruedas, emergencia médica (quedan en rojo), equipaje perdido, reclamo (quedan en ámbar), o si fue asistido por un transfer oficial. Si el pasajero ya está chequeado o tiene transfer asignado, se queda aquí mismo con su alerta — y también aparece listado abajo en "Requerimientos Especiales" para no perderlo de vista. Si todavía está "esperado" y sin transfer, baja SOLO a "Requerimientos Especiales" hasta que, dentro del modal, marques "Assigned to Transfer" y se una a esta lista.</div>
       <div id="salaList"></div>
     </div>
@@ -489,6 +510,13 @@
       <h2>Cargar Transfer Manifest</h2>
       <div class="hint" style="margin-bottom:10px;">Sube el manifest de cada barco en su propio cuadro: cada pasajero queda etiquetado con su barco. Se abrirá un mapeo de columnas para confirmar; si subiste el archivo equivocado, cierra el mapeo antes de confirmar y sube el correcto. Si el manifest trae la fecha solo en la primera fila de cada bloque (y en blanco, "N/A" u "On own" en las siguientes), esas filas heredan la fecha del bloque anterior.</div>
       <div id="manifestUploadArea"></div>
+    </div>
+    <div class="panel">
+      <h2>📞 Cargar manifiesto de teléfonos</h2>
+      <div class="upload-box">
+        <div><strong>Sube el Cabin &amp; Phone Manifest</strong> (usa la hoja “Phone Manifest”) — puede ser de cualquiera de los 2 barcos, o uno por cada barco.<br>Se cruza por Booking y nombre; el prefijo y el teléfono se unen solos. Si el teléfono ya viene en la Transfer Manifest, no es necesario. Los teléfonos escritos a mano no se sobrescriben.</div>
+        <input type="file" id="filePhones" accept=".xlsx,.xls,.csv" onchange="handlePhoneFile(event)">
+      </div>
     </div>
     <div class="panel">
       <h2>🩹 Corregir fechas</h2>
@@ -657,6 +685,27 @@
   </div>
 </div>
 
+<!-- Modal: teléfono del pasajero -->
+<div class="modal-bg" id="phoneModal">
+  <div class="modal">
+    <h3 id="phoneTitle">Teléfono</h3>
+    <div class="cover-section">
+      <label>Teléfono (puedes seleccionarlo y copiarlo)</label>
+      <input type="text" id="phoneInput" inputmode="tel" placeholder="Sin teléfono — escríbelo aquí" oninput="updatePhoneLinks()" style="font-size:18px; font-weight:700;">
+      <div class="hint">Para WhatsApp incluye el código de país, ej. +56 9 1234 5678.</div>
+    </div>
+    <div class="phone-actions">
+      <button class="btn small secondary" id="phoneCopyBtn" onclick="copyPhone()">📋 Copiar</button>
+      <a class="btn small" id="phoneCall" href="#">📞 Llamar</a>
+      <a class="btn small" id="phoneWa" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('phoneModal')">Cerrar</button>
+      <button class="btn" onclick="savePhone()">Guardar teléfono</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: asignar guía y porter al marcar "en camino" -->
 <div class="modal-bg" id="guideModal">
   <div class="modal">
@@ -749,6 +798,13 @@
       <label>Hotel</label>
       <input type="text" id="epHotel" placeholder="Nombre del hotel">
       <div class="hint" style="margin-top:6px;">Por defecto viene del manifest, pero se puede cambiar acá para contingencias o arreglos de último minuto.</div>
+    </div>
+    <div class="cover-section">
+      <label>🧭 Guía asignado</label>
+      <input type="text" id="epGuide" list="epGuideList" placeholder="Sin guía — escribe o elige">
+      <datalist id="epGuideList"></datalist>
+      <input type="text" id="epGuide2" list="epGuideList" placeholder="2º guía (opcional)" style="margin-top:6px;">
+      <div class="hint" style="margin-top:6px;">Normalmente se asigna por grupo (vuelo + hotel) en Sala; aquí se cambia solo para este pasajero.</div>
     </div>
     <div class="cover-section">
       <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
@@ -1074,15 +1130,27 @@ function normDateKey(s){
   return d ? fmtDMY(d) : '';
 }
 function flightKeyNoDate(p){ return normalize((p.airCode||'') + (p.flightNumber||'')); }
+/* Pasajero con vuelo propio = tiene traslado con nosotros. En el manifest real los que no tienen
+   traslado vienen con Air Code "N/A", sin número de vuelo y sin fecha. */
+function isBlankFlightValue(v){
+  const s = (v||'').toString().trim();
+  return !s || /^(n\.?\s?\/?\s?a\.?|-+|\?+|none|tbc|tba|on[\s\-]*own|own\s*arrangement|por\s*su\s*cuenta)$/i.test(s);
+}
+function hasOwnFlight(p){
+  if(!p) return false;
+  return !isBlankFlightValue(p.flightNumber) || (!isBlankFlightValue(p.airCode) && !!String(p.airCode||'').trim() && /\d/.test(String(p.airCode)));
+}
 function dayKeyOf(p){
   if(!p) return '';
   if(p.manualDayDate) return p.manualDayDate;
+  if(p.dateInherited && !hasOwnFlight(p)) return '';   // datos antiguos (v5–v7): sin vuelo no hereda fecha
   return normDateKey(p.arrivingDate);
 }
 function latestArrivingDate(slot){
   let latest = null;
   Object.values(passengersDb).forEach(p=>{
     if(slot && p.shipSlot !== slot) return;
+    if(p.dateInherited && !hasOwnFlight(p)) return;
     const d = parseDMY(normDateKey(p.arrivingDate));
     if(d && (!latest || d > latest)) latest = d;
   });
@@ -1259,10 +1327,12 @@ function formatCellTime(v){
   }
   return String(v).trim();
 }
-async function readSheetSmart(file){
+async function readSheetSmart(file, sheetPattern){
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data, {type:'array', cellDates:false});
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  let sheetName = wb.SheetNames[0];
+  if(sheetPattern){ const found = wb.SheetNames.find(n=>sheetPattern.test(n)); if(found) sheetName = found; }
+  const sheet = wb.Sheets[sheetName];
   const aoa = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
   if(!aoa.length) return null;
   const KEYWORDS = ['booking','bkg','first','last','nombre','apellido','voyage','voy','air','flight','vuelo','arriv','llegada','hotel'];
@@ -1608,15 +1678,27 @@ const MANIFEST_FIELDS = [
   {key:'arrivingTime', label:'Arriving Time', hints:['arriving time','arrival time','arv time','hora llegada','arr time'], required:false},
   {key:'hotelName', label:'Hotel Name', hints:['hotel name','hotel'], required:false},
   {key:'serviceType', label:'Tipo de servicio (compartido/privado)', hints:['service','servicio','privado','private'], required:false},
+  {key:'phone', label:'Teléfono', hints:['phone','telefono','teléfono','celular','mobile','cell','whatsapp','fono'], required:false},
 ];
+const PHONE_FIELDS = [
+  {key:'booking', label:'Booking', hints:['bkgcod','booking','bkg'], required:true},
+  {key:'fullName', label:'Nombre completo del pasajero (Guests Names)', hints:['guests names','guest name','full name','nombre completo','guest'], required:false},
+  {key:'lastName', label:'Apellido (si viene separado)', hints:['name last','last name','lastname','apellido','surname'], required:false},
+  {key:'firstName', label:'Nombre (si viene separado)', hints:['name first','first name','firstname'], required:false},
+  {key:'phonePrefix', label:'Prefijo / código de país', hints:['prefix','prefijo','country code'], required:false},
+  {key:'phone', label:'Teléfono', hints:['phone','telefono','teléfono','celular','mobile','cell','whatsapp','fono'], required:true},
+];
+let mapMode = 'transfer';
+function mapFields(){ return mapMode === 'phone' ? PHONE_FIELDS : MANIFEST_FIELDS; }
 
 let pendingMapRows = null;
 let pendingAfterMap = null;
 let pendingShipSlot = null;
 
-async function startManifestMapping(file, afterFn, shipSlot){
+async function startManifestMapping(file, afterFn, shipSlot, mode){
+  mapMode = mode || 'transfer';
   try{
-    const parsed = await readSheetSmart(file);
+    const parsed = await readSheetSmart(file, (mapMode === 'phone') ? /phone|tel[eé]f|fono/i : null);
     if(!parsed || !parsed.rows.length){ alert('El archivo está vacío o no encontré datos.'); return false; }
     pendingMapRows = parsed.rows;
     pendingAfterMap = afterFn || null;
@@ -1637,10 +1719,21 @@ async function handleManifestFile(e, shipSlot){
   e.target.value = '';
 }
 
+async function handlePhoneFile(e){
+  if(blockIfReadOnly()){ e.target.value = ''; return; }
+  const file = e.target.files[0];
+  if(!file) return;
+  pendingAfterMap = null;
+  await startManifestMapping(file, null, null, 'phone');
+  e.target.value = '';
+}
+
 function openMapModal(headers, rows, shipSlot){
-  document.getElementById('mapInfo').innerHTML = '<span class="ship-tag '+escapeHtml(shipSlot)+'">'+escapeHtml(shipSlot)+'</span> <strong>Transfer Manifest — ' + escapeHtml(shipNameFor(shipSlot)) + '</strong> — ' + rows.length + ' filas detectadas. Confirma qué columna corresponde a cada dato:';
+  if(mapMode === 'phone'){
+    document.getElementById('mapInfo').textContent = 'Manifiesto de teléfonos — ' + rows.length + ' filas detectadas (se cruza con los pasajeros de ambos barcos). Confirma qué columna corresponde a cada dato:';
+  } else document.getElementById('mapInfo').innerHTML = '<span class="ship-tag '+escapeHtml(shipSlot)+'">'+escapeHtml(shipSlot)+'</span> <strong>Transfer Manifest — ' + escapeHtml(shipNameFor(shipSlot)) + '</strong> — ' + rows.length + ' filas detectadas. Confirma qué columna corresponde a cada dato:';
   const container = document.getElementById('mapFieldsContainer');
-  container.innerHTML = MANIFEST_FIELDS.map(f=>{
+  container.innerHTML = mapFields().map(f=>{
     const guess = findColPriority(headers, f.hints);
     const opts = '<option value="">— seleccionar —</option>' +
       headers.map(h => '<option value="'+escapeHtml(h)+'"'+(h===guess?' selected':'')+'>'+escapeHtml(h)+'</option>').join('');
@@ -1655,12 +1748,12 @@ function updateMapPreview(){
   const box = document.getElementById('mapPreview');
   if(!rows.length){ box.style.display='none'; return; }
   const sample = rows.slice(0,3).map(r=>{
-    return MANIFEST_FIELDS.map(f=>{
+    return mapFields().map(f=>{
       const col = document.getElementById('mapSel_'+f.key).value;
       return col ? String(r[col]) : '¿?';
     }).join(' | ');
   }).join('<br>');
-  box.innerHTML = '<strong>Vista previa (' + MANIFEST_FIELDS.map(f=>f.label).join(' | ') + '):</strong><br>' + escapeHtml(sample);
+  box.innerHTML = '<strong>Vista previa (' + mapFields().map(f=>f.label).join(' | ') + '):</strong><br>' + escapeHtml(sample);
   box.style.display = 'block';
 }
 async function cancelMap(){
@@ -1674,7 +1767,7 @@ async function confirmMap(){
   const rows = pendingMapRows || [];
   const cols = {};
   let missingRequired = [];
-  MANIFEST_FIELDS.forEach(f=>{
+  mapFields().forEach(f=>{
     cols[f.key] = document.getElementById('mapSel_'+f.key).value;
     if(f.required && !cols[f.key]) missingRequired.push(f.label);
   });
@@ -1683,7 +1776,7 @@ async function confirmMap(){
   pendingMapRows = null;
   pendingShipSlot = null;
   closeModal('mapModal');
-  await loadManifestRows(rows, cols, shipSlot);
+  if(mapMode === 'phone') await loadPhoneRows(rows, cols); else await loadManifestRows(rows, cols, shipSlot);
   if(pendingAfterMap){ const f = pendingAfterMap; pendingAfterMap = null; await f(); }
 }
 
@@ -1710,10 +1803,15 @@ async function loadManifestRows(rows, cols, shipSlot){
     // (o "N/A" / "On own") en las siguientes: esas filas heredan la fecha del bloque anterior.
     let arrivingDate = cols.arrivingDate ? formatCellDate(r[cols.arrivingDate]) : '';
     let dateInherited = false;
+    const rowHasFlight = hasOwnFlight({
+      airCode: cols.airCode ? String(r[cols.airCode]===undefined?'':r[cols.airCode]).trim() : '',
+      flightNumber: cols.flightNumber ? String(r[cols.flightNumber]===undefined?'':r[cols.flightNumber]).trim() : ''
+    });
     if(isBlankDateValue(arrivingDate)){
-      if(lastDate) filledDates++;
-      arrivingDate = lastDate;
-      dateInherited = !!lastDate;
+      // Solo hereda la fecha del bloque si el pasajero tiene vuelo propio (traslado con nosotros).
+      // Los sin vuelo (Air Code N/A) quedan sin fecha, igual que en la planilla de 1 voyage.
+      if(rowHasFlight && lastDate){ filledDates++; arrivingDate = lastDate; dateInherited = true; }
+      else arrivingDate = '';
     } else {
       lastDate = arrivingDate;
     }
@@ -1733,6 +1831,10 @@ async function loadManifestRows(rows, cols, shipSlot){
       hotelName: cols.hotelName ? String(r[cols.hotelName]===undefined?'':r[cols.hotelName]).trim() : '',
       serviceType: (cols.serviceType && /priv/i.test(String(r[cols.serviceType]||''))) ? 'privado' : 'compartido'
     };
+    if(cols.phone){
+      const ph = String(r[cols.phone]===undefined?'':r[cols.phone]).trim();
+      if(ph && !(existingRec && existingRec.phoneManual)) manifestFields.phone = ph;
+    }
     const k = existingKey || paxKey(booking, lastName, firstName);
     if(existingRec){
       updates['passengers/'+k] = Object.assign({}, existingRec, manifestFields);
@@ -1761,7 +1863,7 @@ async function fixMissingDates(){
   const knownByFlight = {};
   keys.forEach(k=>{
     const p = passengersDb[k];
-    if(!isBlankDateValue(p.arrivingDate)){
+    if(!isBlankDateValue(p.arrivingDate) && hasOwnFlight(p)){
       const fk = flightKeyNoDate(p);
       if(fk && !knownByFlight[fk]) knownByFlight[fk] = p.arrivingDate;
     }
@@ -1770,7 +1872,12 @@ async function fixMissingDates(){
   let fixed = 0, stillMissing = 0;
   keys.forEach(k=>{
     const p = passengersDb[k];
-    if(isBlankDateValue(p.arrivingDate)){
+    if(isBlankDateValue(p.arrivingDate) || (p.dateInherited && !hasOwnFlight(p))){
+      if(!hasOwnFlight(p)){
+        // Sin vuelo propio = sin traslado: no se le asigna fecha; si la tenía heredada (v5–v7), se limpia.
+        if(p.dateInherited && !isBlankDateValue(p.arrivingDate)){ updates['passengers/'+k+'/arrivingDate'] = ''; updates['passengers/'+k+'/dateInherited'] = false; fixed++; }
+        return;
+      }
       const fk = flightKeyNoDate(p);
       if(fk && knownByFlight[fk]){
         updates['passengers/'+k+'/arrivingDate'] = knownByFlight[fk];
@@ -1794,6 +1901,118 @@ async function fixMissingDates(){
     await logAction('Corrigió la fecha de llegada de ' + fixed + ' pasajero(s) sin fecha propia (heredada del mismo vuelo).' + (stillMissing ? (' ' + stillMissing + ' quedaron sin corregir.') : ''));
     alert('Listo. Se corrigió la fecha de ' + fixed + ' pasajero(s).');
   }catch(e){ alert('No se pudo guardar la corrección. Revisa tu conexión.'); }
+}
+
+/* ===== Teléfonos: carga desde manifiesto y botón 📞 ===== */
+function buildPhone(r, cols){
+  const raw = String(cols.phone ? (r[cols.phone]===undefined?'':r[cols.phone]) : '').trim();
+  if(!raw) return '';
+  let pre = String(cols.phonePrefix ? (r[cols.phonePrefix]===undefined?'':r[cols.phonePrefix]) : '').trim();
+  if(pre && !pre.startsWith('+')) pre = '+' + pre.replace(/\D/g,'');
+  if(raw.startsWith('+') || !pre) return raw;
+  return pre + ' ' + raw;
+}
+async function loadPhoneRows(rows, cols){
+  const keys = Object.keys(passengersDb);
+  const updates = {};
+  const assigned = new Set();
+  let matched = 0, byBooking = 0, noMatch = 0;
+  const fallback = [];
+  rows.forEach(r=>{
+    const booking = String(cols.booking ? (r[cols.booking]===undefined?'':r[cols.booking]) : '').trim();
+    const phone = buildPhone(r, cols);
+    if(!booking || !phone) return;
+    // Con 2 barcos se cruza contra los pasajeros de ambos: el booking + nombre identifica al pasajero.
+    const cands = keys.filter(k=>normalize(passengersDb[k].booking) === normalize(booking));
+    if(!cands.length){ noMatch++; return; }
+    const full = normalize(String(cols.fullName ? (r[cols.fullName]||'') : ''));
+    const last = normalize(String(cols.lastName ? (r[cols.lastName]||'') : ''));
+    const first = normalize(String(cols.firstName ? (r[cols.firstName]||'') : ''));
+    const hasName = !!(full || last);
+    let hits = [];
+    if(hasName){
+      const tokens = full.split(/[^a-z0-9]+/).filter(Boolean);
+      hits = cands.filter(k=>{
+        const p = passengersDb[k];
+        const pl = normalize(p.lastName), pf = normalize(p.firstName);
+        if(full){
+          const lt = pl.split(/[^a-z0-9]+/).filter(Boolean), ft = pf.split(/[^a-z0-9]+/).filter(Boolean);
+          return lt.length && lt.every(t=>tokens.includes(t)) && (!ft.length || tokens.includes(ft[0]));
+        }
+        return pl === last && (!first || pf === first);
+      });
+    }
+    if(hits.length){
+      hits.forEach(k=>{
+        if(passengersDb[k].phoneManual) return;
+        updates['passengers/'+k+'/phone'] = phone; assigned.add(k); matched++;
+      });
+    } else if(!hasName){
+      cands.forEach(k=>{ if(!passengersDb[k].phoneManual){ updates['passengers/'+k+'/phone'] = phone; assigned.add(k); byBooking++; } });
+    } else {
+      fallback.push({cands, phone});
+    }
+  });
+  // Nombres que no calzaron: se asigna a quienes de ese booking aún no tienen teléfono.
+  fallback.forEach(f=>{
+    const free = f.cands.filter(k=>!assigned.has(k) && !passengersDb[k].phone && !passengersDb[k].phoneManual);
+    if(free.length){ updates['passengers/'+free[0]+'/phone'] = f.phone; assigned.add(free[0]); byBooking++; }
+    else noMatch++;
+  });
+  try{
+    if(Object.keys(updates).length) await opRef(currentOp).update(updates);
+    await logAction('Cargó manifiesto de teléfonos: ' + (matched+byBooking) + ' pasajero(s) con teléfono.');
+    alert('Listo. ' + matched + ' pasajero(s) con teléfono por nombre' + (byBooking ? (', ' + byBooking + ' asignados por booking') : '') + '.' + (noMatch ? (' ' + noMatch + ' fila(s) sin pasajero en la planilla (booking no cargado).') : ''));
+  }catch(e){ alert('No se pudo guardar los teléfonos. Revisa tu conexión.'); }
+}
+let pendingPhoneKey = null;
+function paxKeyOf(p){
+  const keys = Object.keys(passengersDb);
+  for(let i=0;i<keys.length;i++){ if(passengersDb[keys[i]] === p) return keys[i]; }
+  return null;
+}
+function phoneBtn(p){
+  if(!p) return '';
+  const k = paxKeyOf(p); if(!k) return '';
+  return '<button type="button" class="phone-btn '+(p.phone?'has':'none')+'" title="'+(p.phone?escapeHtml(p.phone):'Sin teléfono')+'" onclick="event.stopPropagation(); openPhoneModal(\''+k+'\')">📞</button>';
+}
+function phoneClean(v){
+  const s = String(v||'').trim();
+  const plus = s.startsWith('+') ? '+' : '';
+  return plus + s.replace(/\D/g,'');
+}
+function updatePhoneLinks(){
+  const v = document.getElementById('phoneInput').value;
+  const c = phoneClean(v);
+  const call = document.getElementById('phoneCall'), wa = document.getElementById('phoneWa');
+  call.href = c ? 'tel:' + c : '#';
+  wa.href = c ? 'https://wa.me/' + c.replace(/^\+/, '') : '#';
+  call.style.opacity = wa.style.opacity = c ? '1' : '.4';
+}
+function openPhoneModal(key){
+  const p = passengersDb[key]; if(!p) return;
+  pendingPhoneKey = key;
+  document.getElementById('phoneTitle').textContent = '📞 ' + displayName(p);
+  document.getElementById('phoneInput').value = p.phone || '';
+  updatePhoneLinks();
+  openModal('phoneModal');
+}
+async function copyPhone(){
+  const v = document.getElementById('phoneInput').value.trim();
+  if(!v){ alert('No hay teléfono para copiar.'); return; }
+  try{ await navigator.clipboard.writeText(v); }
+  catch(e){ const i = document.getElementById('phoneInput'); i.select(); document.execCommand('copy'); }
+  const b = document.getElementById('phoneCopyBtn'); const t = b.textContent; b.textContent = '✅ Copiado'; setTimeout(()=>{ b.textContent = t; }, 1500);
+}
+async function savePhone(){
+  if(blockIfReadOnly()) return;
+  const p = passengersDb[pendingPhoneKey]; if(!p) return;
+  const v = document.getElementById('phoneInput').value.trim();
+  try{
+    await opRef(currentOp, 'passengers/'+pendingPhoneKey).update({phone: v, phoneManual: true});
+    await logAction('Actualizó el teléfono de ' + displayName(p) + '.');
+  }catch(e){ alert('No se pudo guardar.'); return; }
+  closeModal('phoneModal');
 }
 
 /* ===== Alta manual de pasajero ===== */
@@ -1861,6 +2080,9 @@ function openEditPaxModal(key){
   pendingEditPaxKey = key;
   document.getElementById('epModalTitle').textContent = 'Editar — ' + displayName(p);
   document.getElementById('epHotel').value = p.hotelName || '';
+  document.getElementById('epGuide').value = p.guideName || '';
+  document.getElementById('epGuide2').value = p.guide2Name || '';
+  document.getElementById('epGuideList').innerHTML = guideNames().map(n=>'<option value="'+escapeHtml(n)+'">').join('');
   document.getElementById('epCancelled').checked = (p.status === 'cancelado');
   document.getElementById('epRescheduled').checked = !!p.rescheduled;
   document.getElementById('epNewFlight').value = p.newFlightNumber || '';
@@ -1877,6 +2099,10 @@ async function saveEditPax(){
   const key = pendingEditPaxKey;
   const p = passengersDb[key]; if(!p) return;
   const newHotel = document.getElementById('epHotel').value.trim();
+  let newGuide = document.getElementById('epGuide').value.trim();
+  let newGuide2 = document.getElementById('epGuide2').value.trim();
+  if(!newGuide && newGuide2){ newGuide = newGuide2; newGuide2 = ''; }
+  if(newGuide2 && normalize(newGuide2) === normalize(newGuide)) newGuide2 = '';
   const cancelledChecked = document.getElementById('epCancelled').checked;
   const rescheduledChecked = document.getElementById('epRescheduled').checked;
   const newFlight = document.getElementById('epNewFlight').value.trim();
@@ -1888,6 +2114,20 @@ async function saveEditPax(){
     updates['passengers/'+key+'/hotelName'] = newHotel;
     logBits.push('hotel cambiado a "' + (newHotel || '—') + '"');
   }
+
+  if(newGuide !== (p.guideName || '')){
+    updates['passengers/'+key+'/guideName'] = newGuide || null;
+    logBits.push(newGuide ? 'guía asignado: ' + newGuide : 'guía quitado');
+  }
+  if(newGuide2 !== (p.guide2Name || '')){
+    updates['passengers/'+key+'/guide2Name'] = newGuide2 || null;
+    logBits.push(newGuide2 ? '2º guía: ' + newGuide2 : '2º guía quitado');
+  }
+  [newGuide, newGuide2].filter(Boolean).forEach((g, i)=>{
+    if(!Object.values(staffLogDb||{}).some(s=>s && s.role==='Guía' && normalize(s.name)===normalize(g))){
+      updates['staffLog/ST_' + Date.now().toString(36) + i + Math.random().toString(36).slice(2,6)] = {name:g, role:'Guía', method:'manual', time: nowStr(), addedBy: staffName, ts: Date.now()};
+    }
+  });
 
   const wasCancelled = (p.status === 'cancelado');
   if(cancelledChecked && !wasCancelled){
@@ -2208,8 +2448,8 @@ async function confirmEnCamino(skip){
   closeModal('guideModal');
 }
 function guideBadge(p){
-  if(!p || (!p.guideName && !p.porterName)) return '';
-  return '<span class="badge blue">'+(p.guideName?'🧭 '+escapeHtml(p.guideName):'')+(p.guideName&&p.porterName?' · ':'')+(p.porterName?'🧳 '+escapeHtml(p.porterName):'')+'</span>';
+  if(!p || (!paxGuides(p).length && !p.porterName)) return '';
+  return '<span class="badge blue">'+(paxGuides(p).length?'🧭 '+escapeHtml(guidesLabel(p)):'')+(paxGuides(p).length&&p.porterName?' · ':'')+(p.porterName?'🧳 '+escapeHtml(p.porterName):'')+'</span>';
 }
 
 /* ===== Parking / Transfers ===== */
@@ -2513,20 +2753,134 @@ function flightSortKey(p){
   }
   return d.getTime() + hh*3600000 + mm*60000;
 }
+/* Arriba los pasajeros CON traslado (vuelo propio), agrupados por vuelo y ordenados por fecha y
+   hora de llegada, del más temprano al más tarde — los 2 barcos mezclados en el mismo orden.
+   Al final, los sin vuelo propio (sin traslado). */
 function groupByFlight(keys){
   const groups = {};
   keys.forEach(k=>{
     const p = passengersDb[k];
-    const fk = flightKey(p);
-    if(!groups[fk]) groups[fk] = {label: flightLabel(p), keys: [], sortKey: flightSortKey(p)};
+    const own = hasOwnFlight(p);
+    const fk = own ? flightKey({airCode:p.airCode, flightNumber:p.flightNumber, arrivingDate:dayKeyOf(p)}) : '__sin_vuelo__';
+    if(!groups[fk]) groups[fk] = {
+      label: own ? flightLabel(p) : 'Sin vuelo informado (sin traslado con nosotros)',
+      keys: [],
+      sortKey: own ? Math.min(flightSortKey(Object.assign({}, p, {arrivingDate: dayKeyOf(p) || p.arrivingDate})), Number.MAX_VALUE) : Infinity
+    };
     groups[fk].keys.push(k);
   });
-  return Object.values(groups).sort((a,b)=>a.sortKey - b.sortKey);
+  const list = Object.values(groups).sort((a,b)=> a.sortKey === b.sortKey ? a.label.localeCompare(b.label) : (a.sortKey < b.sortKey ? -1 : 1));
+  list.forEach(g=>g.keys.sort((a,b)=>(passengersDb[a].lastName||'').localeCompare(passengersDb[b].lastName||'')));
+  return list;
+}
+
+/* ===== Grupos vuelo + hotel y asignación anticipada de guías ===== */
+const GUIDE_ASSIGN_ROLES = ['Coordinador de Aeropuerto','Ejecutivo de Barco','Coordinador de Parking'];
+function canAssignGuides(){ return !isReadOnly() && GUIDE_ASSIGN_ROLES.includes(staffRole); }
+function splitByHotel(keys){
+  const groups = {};
+  keys.forEach(k=>{
+    const p = passengersDb[k];
+    const hk = hotelKey(p) || '__sin_hotel__';
+    if(!groups[hk]) groups[hk] = {hk, label: hotelLabel(p), keys: []};
+    groups[hk].keys.push(k);
+  });
+  return Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label));
+}
+function guideNames(){
+  const set = new Set();
+  Object.values(staffLogDb || {}).forEach(s=>{ if(s && s.name && s.role === 'Guía') set.add(s.name); });
+  Object.values(passengersDb).forEach(p=>{ paxGuides(p).forEach(g=>set.add(g)); });
+  return Array.from(set).sort((a,b)=>a.localeCompare(b));
+}
+let guideGroupKeys = {};   // id de grupo → paxKeys (para el selector de guía)
+function paxGuides(p){ return [p && p.guideName, p && p.guide2Name].filter(Boolean); }
+function guidesLabel(p){ return paxGuides(p).join(' + '); }
+function guideSelectHtml(groupId, which, common, emptyLabel){
+  let opts = '<option value=""'+(common===''?' selected':'')+'>'+emptyLabel+'</option>';
+  if(common === '__varios__') opts += '<option value="__varios__" selected disabled>Varios guías</option>';
+  guideNames().forEach(n=>{ opts += '<option value="'+escapeHtml(n)+'"'+(n===common?' selected':'')+'>'+escapeHtml(n)+'</option>'; });
+  opts += '<option value="__manual__">✍️ Otro guía…</option>';
+  return '<select onchange="assignGuideToGroup(\''+groupId+'\', this, '+which+')">'+opts+'</select>';
+}
+function commonValue(keys, field){
+  const vals = Array.from(new Set(keys.map(k=>passengersDb[k][field] || '')));
+  return vals.length === 1 ? vals[0] : '__varios__';
+}
+function guideGroupControl(groupId, keys){
+  const c1 = commonValue(keys, 'guideName');
+  const c2 = commonValue(keys, 'guide2Name');
+  if(!canAssignGuides()){
+    if(c1 === '' && c2 === '') return '<span class="guide-chip none">🧭 Sin guía asignado</span>';
+    if(c1 === '__varios__' || c2 === '__varios__') return '<span class="guide-chip">🧭 Varios guías</span>';
+    return '<span class="guide-chip">🧭 ' + escapeHtml([c1, c2].filter(Boolean).join(' + ')) + '</span>';
+  }
+  guideGroupKeys[groupId] = keys;
+  let html = '<label class="guide-assign" style="margin:0;">🧭 Guía ' + guideSelectHtml(groupId, 1, c1, '— Sin guía —') + '</label>';
+  // 2º guía: disponible cuando el grupo ya tiene un primer guía (grupos grandes).
+  if(c1 !== '') html += '<label class="guide-assign" style="margin:0;">➕ 2º guía ' + guideSelectHtml(groupId, 2, c2, '— Sin 2º guía —') + '</label>';
+  return '<span style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">' + html + '</span>';
+}
+async function assignGuideToGroup(groupId, sel, which){
+  which = which === 2 ? 2 : 1;
+  if(blockIfReadOnly()) return;
+  if(!canAssignGuides()){ alert('Solo la coordinación (Coordinador de Aeropuerto, Ejecutivo de Barco o Coordinador de Parking) asigna guías.'); render(); return; }
+  const keys = (guideGroupKeys[groupId] || []).filter(k=>passengersDb[k]);
+  if(!keys.length) return;
+  let name = sel.value;
+  if(name === '__manual__'){
+    name = (prompt(which === 2 ? 'Nombre del 2º guía:' : 'Nombre del guía:') || '').trim();
+    if(!name){ render(); return; }
+  }
+  const field = which === 2 ? 'guide2Name' : 'guideName';
+  if(name){
+    const other = commonValue(keys, which === 2 ? 'guideName' : 'guide2Name');
+    if(other && other !== '__varios__' && normalize(other) === normalize(name)){ alert(name + ' ya es el ' + (which === 2 ? '1er' : '2º') + ' guía de este grupo.'); render(); return; }
+  }
+  const updates = {};
+  keys.forEach(k=>{
+    updates['passengers/'+k+'/'+field] = name || null;
+    // Si se quita el guía principal, el 2º pasa a ser el principal.
+    if(which === 1 && !name){
+      const g2 = passengersDb[k].guide2Name || null;
+      updates['passengers/'+k+'/guideName'] = g2;
+      updates['passengers/'+k+'/guide2Name'] = null;
+    }
+  });
+  try{
+    if(name && !Object.values(staffLogDb||{}).some(s=>s && s.role==='Guía' && normalize(s.name)===normalize(name))){
+      const id = 'ST_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      updates['staffLog/'+id] = {name, role:'Guía', method:'manual', time: nowStr(), addedBy: staffName, ts: Date.now()};
+    }
+    await opRef(currentOp).update(updates);
+    const p0 = passengersDb[keys[0]];
+    const what = which === 2 ? '2º guía' : 'guía';
+    await logAction((name ? 'Asignó como ' + what + ' a ' + name : 'Quitó el ' + what) + ' — ' + keys.length + ' pasajero(s) del vuelo ' + flightLabel(p0) + ' → ' + hotelLabel(p0) + '.');
+  }catch(e){ alert('No se pudo guardar el guía.'); }
+}
+function populateGuideFilter(){
+  const sel = document.getElementById('salaGuideFilter');
+  if(!sel) return;
+  const cur = sel.value;
+  const names = guideNames();
+  sel.innerHTML = '<option value="">🧭 Todos los guías</option><option value="__none__">🧭 Sin guía asignado</option>' +
+    names.map(n=>'<option value="'+escapeHtml(n)+'">🧭 '+escapeHtml(n)+'</option>').join('');
+  if(cur && (cur === '__none__' || names.includes(cur))) sel.value = cur;
+  else if(!cur && staffRole === 'Guía' && names.some(n=>normalize(n)===normalize(staffName))) sel.value = names.find(n=>normalize(n)===normalize(staffName));
+}
+function passesGuideFilter(p){
+  const sel = document.getElementById('salaGuideFilter');
+  const v = sel ? sel.value : '';
+  if(!v) return true;
+  if(v === '__none__') return !paxGuides(p).length;
+  return paxGuides(p).some(g=>normalize(g) === normalize(v));
 }
 
 function renderSala(){
   const allKeys = Object.keys(passengersDb).filter(k=>passesDay(passengersDb[k]));
-  const keys = allKeys.filter(k=>!passengersDb[k].hasOpenRequirement || staysInMainFlow(passengersDb[k]));
+  populateGuideFilter();
+  guideGroupKeys = {};
+  const keys = allKeys.filter(k=>(!passengersDb[k].hasOpenRequirement || staysInMainFlow(passengersDb[k])) && passesGuideFilter(passengersDb[k]));
   document.getElementById('salaCount').textContent = '(' + keys.length + ')';
   const groups = groupByFlight(keys);
   const el = document.getElementById('salaList');
@@ -2534,20 +2888,30 @@ function renderSala(){
   else {
     el.innerHTML = groups.map(g=>{
       const fkSafe = g.label.replace(/[^a-z0-9]/gi,'_');
-      const rows = g.keys.map(k=>{
+      const isNoFlight = g.sortKey === Infinity;
+      const rowHtml = k=>{
         const p = passengersDb[k];
         const showCheckbox = (p.status === 'esperado' || p.status === 'chequeado' || p.status === 'en_camino');
         const checked = p.status !== 'esperado';
         return '<div class="pax-row'+ticaRowClass(p)+'">' +
           '<div>' +
             (showCheckbox ? '<input type="checkbox" class="fk-'+fkSafe+'-check" value="'+k+'" '+(checked?'checked':'')+' onchange="toggleChequeadoCheckbox(\''+k+'\', this.checked)" style="margin-right:8px;">' : '') +
-            '<span class="pname">'+escapeHtml(displayName(p))+'</span> ' + shipTag(p) + ' ' + vipBadge(p) + nuggetWowBadge(p) + ' ' + ticaBadge(p) + ' ' + statusBadge(p) + ' ' + dayBadge(p) + ' ' + requirementBadge(p)+guideBadge(p) +
+            '<span class="pname">'+escapeHtml(displayName(p))+'</span> ' + shipTag(p) + ' ' + vipBadge(p) + nuggetWowBadge(p) + phoneBtn(p) + ' ' + ticaBadge(p) + ' ' + statusBadge(p) + ' ' + dayBadge(p) + ' ' + requirementBadge(p)+guideBadge(p) +
             '<div class="pmeta">Booking '+escapeHtml(p.booking)+' · '+escapeHtml(p.hotelName||'sin hotel')+(p.serviceType==='privado'?' · <strong>Privado</strong>':'')+'</div>' +
           '</div>' +
           '<div class="pactions">' +
             '<button class="btn small amber" onclick="openRequirementModal(\''+k+'\')">📋 Requerimientos</button>' +
           '</div>' +
         '</div>';
+      };
+      // Dentro del vuelo: un bloque por hotel (Ritz juntos, Mandarin juntos), cada uno con su guía.
+      const rows = splitByHotel(g.keys).map((h, i)=>{
+        const ships = new Set(h.keys.map(k=>passengersDb[k].shipSlot).filter(Boolean));
+        const mix = ships.size > 1 ? ' <span class="badge green">2 barcos</span>' : '';
+        const gid = 'G_' + fkSafe + '_' + i;
+        return '<div class="hotel-subhead"><span>🏨 '+escapeHtml(h.label)+mix+' <span class="counter">· '+h.keys.length+' pax</span></span>' +
+          (isNoFlight ? '' : guideGroupControl(gid, h.keys)) + '</div>' +
+          h.keys.map(rowHtml).join('');
       }).join('');
       return '<div class="flight-group">' +
         '<div class="flight-header"><span>✈️ '+escapeHtml(g.label)+'</span><span class="counter">'+g.keys.length+' pax</span></div>' +
@@ -2573,7 +2937,7 @@ function renderSala(){
         return '<div class="pax-row">' +
           '<div>' +
             (showCheckbox ? '<input type="checkbox" '+(checked?'checked':'')+' onchange="toggleChequeadoCheckbox(\''+k+'\', this.checked)" style="margin-right:8px;">' : '') +
-            '<span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+
+            '<span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p) + phoneBtn(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+
             '<div class="pmeta">Booking '+escapeHtml(p.booking)+' · '+escapeHtml(flightLabel(p))+' · '+escapeHtml(p.hotelName||'sin hotel')+'</div>' +
           '</div>' +
           '<div class="pactions">' +
@@ -2603,18 +2967,21 @@ function renderTica(){
   const el = document.getElementById('ticaList');
   if(!groups.length){ el.innerHTML = '<div class="empty">Aún no hay pasajeros cargados para este día. Ve a "Manifest / Reporte" para subir la Transfer Manifest.</div>'; return; }
   el.innerHTML = groups.map(g=>{
-    const rows = g.keys.map(k=>{
+    const rowHtml = k=>{
       const p = passengersDb[k];
       const out = !!p.ticaSalida;
       const canMark = p.status !== 'cancelado';
       return '<div class="pax-row'+(out?' tica-out':'')+'">' +
         '<div>' +
           (canMark ? '<input type="checkbox" '+(out?'checked':'')+' onchange="toggleTicaSalida(\''+k+'\', this.checked)" style="margin-right:8px;" title="Van saliendo">' : '') +
-          '<span class="pname">'+escapeHtml(displayName(p))+'</span> ' + shipTag(p) + ' ' + vipBadge(p) + nuggetWowBadge(p) + ' ' + ticaBadge(p, true) + ' ' + statusBadge(p) + ' ' + requirementBadge(p)+guideBadge(p) +
+          '<span class="pname">'+escapeHtml(displayName(p))+'</span> ' + shipTag(p) + ' ' + vipBadge(p) + nuggetWowBadge(p) + phoneBtn(p) + ' ' + ticaBadge(p, true) + ' ' + statusBadge(p) + ' ' + requirementBadge(p)+guideBadge(p) +
           '<div class="pmeta">Booking '+escapeHtml(p.booking)+' · '+escapeHtml(p.hotelName||'sin hotel')+'</div>' +
         '</div>' +
       '</div>';
-    }).join('');
+    };
+    const rows = splitByHotel(g.keys).map(h=>
+      '<div class="hotel-subhead"><span>🏨 '+escapeHtml(h.label)+' <span class="counter">· '+h.keys.length+' pax</span></span></div>' + h.keys.map(rowHtml).join('')
+    ).join('');
     return '<div class="flight-group">' +
       '<div class="flight-header"><span>✈️ '+escapeHtml(g.label)+'</span><span class="counter">'+g.keys.length+' pax</span></div>' +
       rows +
@@ -2699,7 +3066,7 @@ function renderDispoRow(k){
   const blocked = selectedDispo.has(k) ? '' : dispoBlockReason(p);
   return '<div class="pax-row"'+(blocked?' style="opacity:.55;"':'')+'>' +
     '<div><input type="checkbox" onchange="toggleDispo(\''+k+'\', this.checked)" '+(selectedDispo.has(k)?'checked':'')+(blocked?' disabled':'')+' style="margin-right:8px;">' +
-      '<span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+
+      '<span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p) + phoneBtn(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+
       (blocked ? ' <span class="badge coral">'+blocked+'</span>' : '') +
       '<div class="pmeta">'+escapeHtml(flightLabel(p))+(p.serviceType==='privado'?' · <strong>Privado</strong>':'')+'</div>' +
     '</div>' +
@@ -2761,12 +3128,12 @@ function renderParking(){
     byStatus[t.status].push(id);
   });
 
-  document.getElementById('transfersArmando').innerHTML = renderTransferList(byStatus.armando, 'armando');
-  document.getElementById('transfersEnViaje').innerHTML = renderTransferList(byStatus.salio, 'salio');
+  document.getElementById('transfersArmando').innerHTML = renderTransferList(byStatus.armando, 'armando', 'parking');
+  document.getElementById('transfersEnViaje').innerHTML = renderTransferList(byStatus.salio, 'salio', 'parking');
   document.getElementById('transfersLlegados').innerHTML = renderTransferList(byStatus.llegado, 'llegado');
 }
 
-function renderTransferList(ids, kind){
+function renderTransferList(ids, kind, fromTab){
   if(!ids.length) return '<div class="empty">Sin transfers en este estado.</div>';
   return ids.map(id=>{
     const t = transfersDb[id];
@@ -2779,7 +3146,9 @@ function renderTransferList(ids, kind){
       actions = '<button class="btn small ghost" onclick="openAddToTransferModal(\''+id+'\')">➕ Agregar pasajeros</button>' +
         '<button class="btn small" onclick="markTransferSalio(\''+id+'\')">🚐 Transfer salió</button>';
     } else if(kind === 'salio'){
-      actions = '<button class="btn small" onclick="markTransferLlegado(\''+id+'\')">✅ Llegó al hotel</button>';
+      actions = (fromTab === 'parking')
+        ? '<span class="hint">🏨 La llegada al hotel la confirma Hospitality en su pestaña.</span>'
+        : '<button class="btn small" onclick="markTransferLlegado(\''+id+'\')">✅ Llegó al hotel</button>';
     }
     return '<div class="transfer-card">' +
       '<div class="transfer-head">' +
@@ -2816,7 +3185,7 @@ function renderPasajeros(){
   if(!entries.length){ el.innerHTML = '<div class="empty">Sin resultados.</div>'; return; }
   el.innerHTML = entries.map(([k,p])=>{
     return '<div class="pax-row">' +
-      '<div><span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+(p.manual?' <span class="badge coral">Manual</span>':'')+
+      '<div><span class="pname">'+escapeHtml(displayName(p))+'</span> '+shipTag(p)+' '+vipBadge(p) + nuggetWowBadge(p) + phoneBtn(p)+' '+statusBadge(p)+' '+dayBadge(p)+' '+requirementBadge(p)+guideBadge(p)+(p.manual?' <span class="badge coral">Manual</span>':'')+
         '<div class="pmeta">Booking '+escapeHtml(p.booking)+' · '+escapeHtml(flightLabel(p))+' · '+escapeHtml(p.hotelName||'sin hotel')+(p.serviceType==='privado'?' · <strong>Privado</strong>':'')+'</div>' +
       '</div>' +
       '<div class="pactions">' +
